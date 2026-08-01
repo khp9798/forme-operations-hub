@@ -2,15 +2,15 @@ services:
   postgres:
     image: postgres:17-alpine
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-forme_ops}
-      POSTGRES_USER: ${POSTGRES_USER:-forme}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-forme_local_password}
+      POSTGRES_DB: ${FORME_OPS_POSTGRES_DB:-forme_ops}
+      POSTGRES_USER: ${FORME_OPS_POSTGRES_USER:-forme}
+      POSTGRES_PASSWORD: ${FORME_OPS_POSTGRES_PASSWORD:-forme_local_password}
     ports:
-      - "5432:5432"
+      - "${FORME_OPS_POSTGRES_PORT:-5433}:5432"
     volumes:
       - forme-ops-postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-forme} -d ${POSTGRES_DB:-forme_ops}"]
+      test: ["CMD-SHELL", "pg_isready -U ${FORME_OPS_POSTGRES_USER:-forme} -d ${FORME_OPS_POSTGRES_DB:-forme_ops}"]
       interval: 5s
       timeout: 3s
       retries: 10
