@@ -16,6 +16,7 @@ spring:
     user:
       name: ${OPS_USERNAME:ops-admin}
       password: ${OPS_PASSWORD:forme-local-admin}
+      roles: ${OPS_ROLES:OPERATOR}
 
 management:
   endpoints:

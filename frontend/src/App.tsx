@@ -1,4 +1,7 @@
+import { useState } from 'react'
 import './App.css'
+import { LoginScreen, useAuth } from './auth/AuthContext'
+import { InventoryPage } from './inventory/InventoryPage'
 
 const metrics = [
   { label: '오늘 통합 주문', value: '18,420', delta: '+12.4%', tone: 'blue' },
@@ -21,18 +24,24 @@ const exceptions = [
 ]
 
 function App() {
+  const { credential, operator, restoring, logout } = useAuth()
+  const [page, setPage] = useState<'overview' | 'inventory'>('overview')
+
+  if (restoring) return <div className="session-loading">운영 세션을 확인하는 중입니다.</div>
+  if (!credential || !operator) return <LoginScreen />
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand"><span>FORME</span><small>OPS</small></div>
         <nav aria-label="주요 메뉴">
-          <a className="active" href="#overview">운영 현황</a>
-          <a href="#orders">주문 통합</a>
-          <a href="#inventory">재고 관리</a>
-          <a href="#batch">배치 작업</a>
-          <a href="#approvals">승인 업무</a>
-          <a href="#audit">감사 로그</a>
-          <a href="#assistant">AI 어시스턴트</a>
+          <button className={page === 'overview' ? 'active' : ''} onClick={() => setPage('overview')}>운영 현황</button>
+          <button disabled>주문 통합 <small>준비 중</small></button>
+          <button className={page === 'inventory' ? 'active' : ''} onClick={() => setPage('inventory')}>재고 관리</button>
+          <button disabled>배치 작업 <small>준비 중</small></button>
+          <button disabled>승인 업무 <small>준비 중</small></button>
+          <button disabled>감사 로그 <small>준비 중</small></button>
+          <button disabled>AI 어시스턴트 <small>준비 중</small></button>
         </nav>
         <div className="sidebar-foot">
           <span className="health-dot" /> 모든 시스템 정상
@@ -41,11 +50,13 @@ function App() {
       </aside>
 
       <main>
+        {page === 'inventory' ? <InventoryPage /> : <>
         <header className="topbar">
           <div><p className="eyebrow">GLOBAL OPERATIONS CONTROL</p><h1>운영 현황</h1></div>
           <div className="header-actions">
             <button className="search">⌕&nbsp; 주문·SKU·작업 검색</button>
-            <button className="profile" aria-label="사용자 메뉴">KP</button>
+            <div className="operator"><span>{operator.username}</span><small>{operator.roles.includes('ROLE_OPERATOR') ? 'OPERATOR' : 'USER'}</small></div>
+            <button className="profile" aria-label="로그아웃" onClick={logout}>OUT</button>
           </div>
         </header>
 
@@ -91,6 +102,7 @@ function App() {
             <div><span>04</span><b>출고 지시</b><strong>16,706</strong></div>
           </div>
         </section>
+        </>}
       </main>
     </div>
   )
