@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: forme-operations-hub
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/forme_ops}
+    username: ${DATABASE_USERNAME:forme}
+    password: ${DATABASE_PASSWORD:forme_local_password}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  batch:
+    job:
+      enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+server:
+  shutdown: graceful
