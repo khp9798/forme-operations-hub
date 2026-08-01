@@ -3,7 +3,7 @@ package dev.forme.operations.inventory;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -40,6 +41,14 @@ class InventoryControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "viewer", roles = "VIEWER")
+    void rejectsOperatorWithoutInventoryRole() throws Exception {
+        mockMvc.perform(get("/api/v1/inventory"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(username = "ops-admin", roles = "OPERATOR")
     void searchesInventory() throws Exception {
         when(inventoryService.search("MLB", "ICN-01")).thenReturn(List.of(
                 new InventoryPositionResponse("ICN-01", "인천 통합 물류센터", "MLB", "3ACPB014N",
@@ -48,14 +57,14 @@ class InventoryControllerTest {
 
         mockMvc.perform(get("/api/v1/inventory")
                         .param("query", "MLB")
-                        .param("warehouseCode", "ICN-01")
-                        .with(httpBasic("ops-admin", "forme-local-admin")))
+                        .param("warehouseCode", "ICN-01"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].skuCode").value("MLB-CAP-0091-BK-F"))
                 .andExpect(jsonPath("$[0].availableQuantity").value(108));
     }
 
     @Test
+    @WithMockUser(username = "ops-admin", roles = "OPERATOR")
     void createsMovementWithAuthenticatedActor() throws Exception {
         when(inventoryService.move(any(InventoryMovementRequest.class), eq("ops-admin")))
                 .thenReturn(new InventoryMovementResponse(UUID.fromString("11111111-1111-1111-1111-111111111111"),
@@ -63,7 +72,7 @@ class InventoryControllerTest {
                         5, 120, 17, 103, 2, false));
 
         mockMvc.perform(post("/api/v1/inventory/movements")
-                        .with(httpBasic("ops-admin", "forme-local-admin"))
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -81,9 +90,10 @@ class InventoryControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "ops-admin", roles = "OPERATOR")
     void rejectsInvalidMovement() throws Exception {
         mockMvc.perform(post("/api/v1/inventory/movements")
-                        .with(httpBasic("ops-admin", "forme-local-admin"))
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {

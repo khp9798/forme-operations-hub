@@ -1,52 +1,41 @@
 import { createContext, useContext, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
-import { apiRequest } from '../api/client'
+import { apiRequest, loginRequest, logoutRequest } from '../api/client'
 
 type Operator = { username: string; roles: string[] }
 
 type AuthContextValue = {
-  credential: string | null
   operator: Operator | null
   restoring: boolean
   login: (username: string, password: string) => Promise<void>
-  logout: () => void
+  logout: () => Promise<void>
 }
 
-const STORAGE_KEY = 'forme-ops-basic-credential'
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [credential, setCredential] = useState<string | null>(() => sessionStorage.getItem(STORAGE_KEY))
   const [operator, setOperator] = useState<Operator | null>(null)
-  const [restoring, setRestoring] = useState(Boolean(credential))
+  const [restoring, setRestoring] = useState(true)
 
   useEffect(() => {
-    if (!credential) return
-    apiRequest<Operator>('/api/v1/auth/me', credential)
+    apiRequest<Operator>('/api/v1/auth/me')
       .then(setOperator)
-      .catch(() => {
-        sessionStorage.removeItem(STORAGE_KEY)
-        setCredential(null)
-      })
+      .catch(() => setOperator(null))
       .finally(() => setRestoring(false))
-  }, [credential])
+  }, [])
 
   const value = useMemo<AuthContextValue>(() => ({
-    credential,
     operator,
     restoring,
     login: async (username, password) => {
-      const encoded = btoa(unescape(encodeURIComponent(`${username}:${password}`)))
-      const current = await apiRequest<Operator>('/api/v1/auth/me', encoded)
-      sessionStorage.setItem(STORAGE_KEY, encoded)
-      setCredential(encoded)
+      await loginRequest(username, password)
+      const current = await apiRequest<Operator>('/api/v1/auth/me')
       setOperator(current)
     },
-    logout: () => {
-      sessionStorage.removeItem(STORAGE_KEY)
-      setCredential(null)
+    logout: async () => {
+      await logoutRequest()
       setOperator(null)
     },
-  }), [credential, operator, restoring])
+  }), [operator, restoring])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

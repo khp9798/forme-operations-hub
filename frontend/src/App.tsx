@@ -24,11 +24,11 @@ const exceptions = [
 ]
 
 function App() {
-  const { credential, operator, restoring, logout } = useAuth()
+  const { operator, restoring, logout } = useAuth()
   const [page, setPage] = useState<'overview' | 'inventory'>('overview')
 
   if (restoring) return <div className="session-loading">운영 세션을 확인하는 중입니다.</div>
-  if (!credential || !operator) return <LoginScreen />
+  if (!operator) return <LoginScreen />
 
   return (
     <div className="app-shell">
@@ -56,7 +56,7 @@ function App() {
           <div className="header-actions">
             <button className="search">⌕&nbsp; 주문·SKU·작업 검색</button>
             <div className="operator"><span>{operator.username}</span><small>{operator.roles.includes('ROLE_OPERATOR') ? 'OPERATOR' : 'USER'}</small></div>
-            <button className="profile" aria-label="로그아웃" onClick={logout}>OUT</button>
+            <button className="profile" aria-label="로그아웃" onClick={() => void logout()}>OUT</button>
           </div>
         </header>
 

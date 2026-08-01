@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { apiRequest } from '../api/client'
-import { useAuth } from '../auth/AuthContext'
 
 type InventoryPosition = {
   warehouseCode: string; warehouseName: string; brandCode: string; styleCode: string
@@ -16,7 +15,6 @@ const movementLabels: Record<MovementType, string> = {
 }
 
 export function InventoryPage() {
-  const { credential } = useAuth()
   const [items, setItems] = useState<InventoryPosition[]>([])
   const [query, setQuery] = useState('')
   const [warehouse, setWarehouse] = useState('')
@@ -26,34 +24,32 @@ export function InventoryPage() {
   const [notice, setNotice] = useState('')
 
   const load = useCallback(async () => {
-    if (!credential) return
     setLoading(true); setError('')
     const params = new URLSearchParams()
     if (query.trim()) params.set('query', query.trim())
     if (warehouse) params.set('warehouseCode', warehouse)
     try {
-      setItems(await apiRequest<InventoryPosition[]>(`/api/v1/inventory?${params}`, credential))
+      setItems(await apiRequest<InventoryPosition[]>(`/api/v1/inventory?${params}`))
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '재고를 불러오지 못했습니다.')
     } finally { setLoading(false) }
-  }, [credential, query, warehouse])
+  }, [query, warehouse])
 
   useEffect(() => {
-    if (!credential) return
     let active = true
-    apiRequest<InventoryPosition[]>('/api/v1/inventory', credential)
+    apiRequest<InventoryPosition[]>('/api/v1/inventory')
       .then((positions) => { if (active) setItems(positions) })
       .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : '재고를 불러오지 못했습니다.') })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [credential])
+  }, [])
 
   async function submitMovement(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!credential || !selected) return
+    if (!selected) return
     const data = new FormData(event.currentTarget)
     try {
-      const result = await apiRequest<{ idempotent: boolean }>('/api/v1/inventory/movements', credential, {
+      const result = await apiRequest<{ idempotent: boolean }>('/api/v1/inventory/movements', {
         method: 'POST', body: JSON.stringify({
           warehouseCode: selected.warehouseCode, skuCode: selected.skuCode,
           movementType: data.get('movementType'), quantity: Number(data.get('quantity')),

@@ -39,7 +39,9 @@ flowchart LR
 - 창고·상품·SKU 검색 및 창고별 가용 재고 조회 API
 - 입고·조정·예약·해제·파손 재고 이동과 변경 원장
 - 행 잠금과 멱등성 키를 이용한 동시 요청·중복 요청 보호
-- 운영자 로그인과 세션 복구를 중앙 관리하는 React 인증 컨텍스트
+- PostgreSQL 사용자·역할, BCrypt 비밀번호, HttpOnly 서버 세션 기반 운영자 인증
+- CSRF 토큰으로 보호되는 로그인·재고 변경·로그아웃 요청
+- 로그인과 세션 복구를 중앙 관리하는 React 인증 컨텍스트
 - 실제 PostgreSQL API에 연결된 반응형 재고 조회·조정 화면
 
 ## 로컬 실행
@@ -60,7 +62,9 @@ npm run dev
 - Health: `http://localhost:8080/actuator/health`
 - Web: `http://localhost:5173`
 
-개발용 운영 계정의 기본값은 `ops-admin` / `forme-local-admin`입니다. 실제 환경에서는 반드시 `OPS_USERNAME`, `OPS_PASSWORD` 환경변수로 교체합니다. PostgreSQL은 Mac에 설치된 DB와 충돌하지 않도록 기본적으로 `5433` 포트를 사용합니다.
+개발용 운영 계정은 `ops-admin` / `forme-local-admin`입니다. 비밀번호는 Flyway 로컬 시드에서 BCrypt 해시로만 저장됩니다. PostgreSQL은 Mac에 설치된 DB와 충돌하지 않도록 기본적으로 `5433` 포트를 사용합니다.
+
+인증 후 브라우저에는 비밀번호 대신 HttpOnly `JSESSIONID` 쿠키가 저장됩니다. 세션은 기본 30분이며 상태 변경 요청은 CSRF 토큰이 필요합니다. 재고 API는 `OPERATOR` 또는 `ADMIN` 역할만 접근할 수 있습니다.
 
 ## 재고 API
 
@@ -87,7 +91,7 @@ curl -u ops-admin:forme-local-admin \
 
 ## 다음 구현 순서
 
-1. PostgreSQL 사용자·역할 기반 세션 인증
+1. PostgreSQL 동시 재고 변경 통합 테스트
 2. 외부 주문 CSV 업로드 및 검증
 3. Spring Batch 청크 처리·실패 격리·재시작
 4. 역할 기반 승인·감사 로그
