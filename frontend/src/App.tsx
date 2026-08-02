@@ -2,6 +2,7 @@ import { useState } from 'react'
 import './App.css'
 import { LoginScreen, useAuth } from './auth/AuthContext'
 import { InventoryPage } from './inventory/InventoryPage'
+import { OrderImportPage } from './order-import/OrderImportPage'
 
 const metrics = [
   { label: '오늘 통합 주문', value: '18,420', delta: '+12.4%', tone: 'blue' },
@@ -25,7 +26,7 @@ const exceptions = [
 
 function App() {
   const { operator, restoring, logout } = useAuth()
-  const [page, setPage] = useState<'overview' | 'inventory'>('overview')
+  const [page, setPage] = useState<'overview' | 'orders' | 'inventory'>('overview')
 
   if (restoring) return <div className="session-loading">운영 세션을 확인하는 중입니다.</div>
   if (!operator) return <LoginScreen />
@@ -36,7 +37,7 @@ function App() {
         <div className="brand"><span>FORME</span><small>OPS</small></div>
         <nav aria-label="주요 메뉴">
           <button className={page === 'overview' ? 'active' : ''} onClick={() => setPage('overview')}>운영 현황</button>
-          <button disabled>주문 통합 <small>준비 중</small></button>
+          <button className={page === 'orders' ? 'active' : ''} onClick={() => setPage('orders')}>주문 통합</button>
           <button className={page === 'inventory' ? 'active' : ''} onClick={() => setPage('inventory')}>재고 관리</button>
           <button disabled>배치 작업 <small>준비 중</small></button>
           <button disabled>승인 업무 <small>준비 중</small></button>
@@ -50,7 +51,7 @@ function App() {
       </aside>
 
       <main>
-        {page === 'inventory' ? <InventoryPage /> : <>
+        {page === 'inventory' ? <InventoryPage /> : page === 'orders' ? <OrderImportPage /> : <>
         <header className="topbar">
           <div><p className="eyebrow">GLOBAL OPERATIONS CONTROL</p><h1>운영 현황</h1></div>
           <div className="header-actions">

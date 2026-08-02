@@ -24,6 +24,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health", "/api/v1/system/info", "/api/v1/auth/csrf", "/api/v1/auth/login").permitAll()
                         .requestMatchers("/api/v1/inventory/**").hasAnyRole("OPERATOR", "ADMIN")
+                        .requestMatchers("/api/v1/order-imports/**").hasAnyRole("OPERATOR", "ADMIN")
                         .anyRequest().authenticated())
                 .formLogin(form -> form
                         .loginProcessingUrl("/api/v1/auth/login")
