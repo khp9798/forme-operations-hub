@@ -32,10 +32,15 @@ class OrderImportIntegrationTest {
     }
 
     @Autowired OrderImportService service;
+    @Autowired OrderBatchService batchService;
     @Autowired JdbcTemplate jdbcTemplate;
 
     @BeforeEach
-    void clearImports() { jdbcTemplate.update("DELETE FROM integration_jobs WHERE job_type = 'ORDER_VALIDATION'"); }
+    void clearImports() {
+        jdbcTemplate.update("DELETE FROM external_order_items");
+        jdbcTemplate.update("DELETE FROM external_orders");
+        jdbcTemplate.update("DELETE FROM integration_jobs WHERE job_type = 'ORDER_VALIDATION'");
+    }
 
     @Test
     void storesValidAndInvalidRowsWithReasons() {
@@ -59,5 +64,23 @@ class OrderImportIntegrationTest {
         assertEquals(1, jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM order_import_rows WHERE integration_job_id = ? AND validation_status = 'INVALID'",
                 Integer.class, result.jobId()));
+
+        OrderBatchResponse firstRun = batchService.process(result.jobId(), "integration-test");
+        assertEquals("COMPLETED", firstRun.status());
+        assertEquals(1, firstRun.readCount());
+        assertEquals(1, firstRun.writeCount());
+        assertEquals(1, firstRun.processedCount());
+        assertEquals(0, firstRun.remainingCount());
+        assertEquals(1, firstRun.invalidCount());
+        assertEquals(1, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM external_orders", Integer.class));
+        assertEquals(1, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM external_order_items", Integer.class));
+
+        OrderBatchResponse rerun = batchService.process(result.jobId(), "integration-test");
+        assertEquals(0, rerun.readCount());
+        assertEquals(0, rerun.writeCount());
+        assertEquals(1, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM external_orders", Integer.class));
+        assertEquals(1, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM external_order_items", Integer.class));
+        assertEquals(2, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM batch_job_execution", Integer.class));
+        assertEquals(2, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM batch_step_execution", Integer.class));
     }
 }

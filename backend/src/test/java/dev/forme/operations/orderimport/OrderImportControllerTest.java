@@ -27,6 +27,7 @@ import dev.forme.operations.config.SecurityConfig;
 class OrderImportControllerTest {
     @Autowired MockMvc mockMvc;
     @MockitoBean OrderImportService orderImportService;
+    @MockitoBean OrderBatchService orderBatchService;
 
     @Test
     void requiresAuthentication() throws Exception {
@@ -51,5 +52,20 @@ class OrderImportControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.jobId").value(jobId.toString()))
                 .andExpect(jsonPath("$.validCount").value(1));
+    }
+
+    @Test
+    @WithMockUser(username = "ops-admin", roles = "OPERATOR")
+    void launchesOrderBatch() throws Exception {
+        UUID jobId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+        when(orderBatchService.process(jobId, "ops-admin")).thenReturn(
+                new OrderBatchResponse(jobId, 7, "COMPLETED", 3, 3, 3, 0, 1));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/api/v1/order-imports/{jobId}/process", jobId).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.batchExecutionId").value(7))
+                .andExpect(jsonPath("$.processedCount").value(3))
+                .andExpect(jsonPath("$.remainingCount").value(0));
     }
 }

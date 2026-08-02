@@ -9,6 +9,10 @@ type ImportResult = {
   jobId: string; fileName: string; status: string; totalCount: number
   validCount: number; invalidCount: number; rows: ImportRow[]
 }
+type BatchResult = {
+  importJobId: string; batchExecutionId: number; status: string; readCount: number; writeCount: number
+  processedCount: number; remainingCount: number; invalidCount: number
+}
 
 const template = `source_order_id,ordered_at,sku_code,quantity,unit_price,currency,recipient_name,postal_code,address_line1,address_line2
 EXT-20260802-001,2026-08-02T10:30:00+09:00,MLB-CAP-0091-BK-F,2,39000,KRW,김포르메,04524,서울특별시 중구 세종대로 110,테스트 주문
@@ -21,10 +25,20 @@ export function OrderImportPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState<ImportResult | null>(null)
+  const [processing, setProcessing] = useState(false)
+  const [batchResult, setBatchResult] = useState<BatchResult | null>(null)
 
   function selectFile(selected?: File) {
     if (!selected) return
-    setFile(selected); setResult(null); setError('')
+    setFile(selected); setResult(null); setBatchResult(null); setError('')
+  }
+
+  async function processValidRows() {
+    if (!result) return
+    setProcessing(true); setError('')
+    try { setBatchResult(await apiRequest<BatchResult>(`/api/v1/order-imports/${result.jobId}/process`, { method: 'POST' })) }
+    catch (reason) { setError(reason instanceof Error ? reason.message : '주문 배치를 실행하지 못했습니다.') }
+    finally { setProcessing(false) }
   }
 
   async function upload() {
@@ -75,6 +89,13 @@ export function OrderImportPage() {
         <div><span>전체</span><strong>{result.totalCount}</strong></div><div className="valid"><span>정상</span><strong>{result.validCount}</strong></div><div className="invalid"><span>오류</span><strong>{result.invalidCount}</strong></div>
         <p>{result.invalidCount ? '오류 행을 수정한 뒤 파일을 다시 업로드해 주세요.' : '모든 주문이 다음 처리 단계로 이동할 수 있습니다.'}</p>
       </div>
+      <div className="batch-action">
+        <div><b>정상 주문 처리</b><small>검증을 통과한 {result.validCount}개 행만 100개 단위 트랜잭션으로 주문 DB에 반영합니다.</small></div>
+        <button className="primary" disabled={processing || result.validCount === 0 || batchResult?.remainingCount === 0} onClick={() => void processValidRows()}>
+          {processing ? '배치 실행 중…' : batchResult ? '처리 완료' : '정상 주문 배치 실행'}
+        </button>
+      </div>
+      {batchResult && <div className="batch-result" role="status"><b>배치 #{batchResult.batchExecutionId} 완료</b><span>이번 실행 읽기 {batchResult.readCount} · 쓰기 {batchResult.writeCount}</span><span>누적 처리 {batchResult.processedCount} · 남은 정상 행 {batchResult.remainingCount} · 격리된 오류 {batchResult.invalidCount}</span></div>}
       <div className="table-wrap"><table className="import-table"><thead><tr><th>행</th><th>외부 주문번호</th><th>SKU</th><th>수량</th><th>단가</th><th>결과</th></tr></thead>
         <tbody>{result.rows.map((row) => <tr key={row.lineNumber}><td>{row.lineNumber}</td><td><b>{row.sourceOrderId || '—'}</b></td><td>{row.skuCode || '—'}</td><td>{row.quantity ?? '—'}</td><td>{row.unitPrice?.toLocaleString() ?? '—'}</td><td><span className={`validation-badge ${row.status.toLowerCase()}`}>{row.status === 'VALID' ? '정상' : '오류'}</span>{row.errors.length > 0 && <small className="row-errors">{row.errors.join(' · ')}</small>}</td></tr>)}</tbody>
       </table></div>
