@@ -25,6 +25,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health", "/api/v1/system/info", "/api/v1/auth/csrf", "/api/v1/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/inventory/movements").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/analytics/**").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/analytics/**").hasAnyRole("OPERATOR", "APPROVER", "ADMIN")
                         .requestMatchers("/api/v1/inventory/**").hasAnyRole("OPERATOR", "ADMIN")
                         .requestMatchers("/api/v1/order-imports/**").hasAnyRole("OPERATOR", "ADMIN")
                         .requestMatchers("/api/v1/approvals/**").hasAnyRole("APPROVER", "ADMIN")

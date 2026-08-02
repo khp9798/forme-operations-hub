@@ -4,6 +4,7 @@ import { apiRequest } from '../api/client'
 type AuditLog = { id: string; actor: string; action: string; entityType: string; entityId: string; summary: string; occurredAt: string }
 const actionLabel: Record<string, string> = {
   INVENTORY_ADJUSTMENT_REQUESTED: '조정 요청', INVENTORY_ADJUSTMENT_APPROVED: '승인·반영', INVENTORY_ADJUSTMENT_REJECTED: '요청 거절',
+  SALES_AGGREGATE_REFRESHED: '판매 집계 갱신',
 }
 
 export function AuditLogPage() {
