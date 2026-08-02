@@ -39,7 +39,7 @@ class OrderImportIntegrationTest {
 
     @Test
     void storesValidAndInvalidRowsWithReasons() {
-        String csv = """
+        String csv = "\uFEFF" + """
                 source_order_id,ordered_at,sku_code,quantity,unit_price,currency,recipient_name,postal_code,address_line1,address_line2
                 EXT-1,2026-08-02T10:30:00+09:00,MLB-CAP-0091-BK-F,2,39000,KRW,김포르메,04524,서울 중구,테스트
                 EXT-2,not-a-date,UNKNOWN-SKU,0,-1,KR,이오퍼레이터,,,

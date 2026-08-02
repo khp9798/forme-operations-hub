@@ -85,20 +85,23 @@ public class OrderImportService {
                 .setIgnoreEmptyLines(true)
                 .setTrim(true)
                 .get();
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8));
-             CSVParser parser = format.parse(reader)) {
-            List<String> actualHeaders = new ArrayList<>(parser.getHeaderMap().keySet());
-            if (!actualHeaders.equals(HEADERS)) {
-                throw new OrderImportValidationException("CSV 헤더가 템플릿과 다릅니다. 제공된 양식을 사용해 주세요.");
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
+            reader.mark(1);
+            if (reader.read() != '\uFEFF') reader.reset();
+            try (CSVParser parser = format.parse(reader)) {
+                List<String> actualHeaders = new ArrayList<>(parser.getHeaderMap().keySet());
+                if (!actualHeaders.equals(HEADERS)) {
+                    throw new OrderImportValidationException("CSV 헤더가 템플릿과 다릅니다. 제공된 양식을 사용해 주세요.");
+                }
+                List<ParsedRow> rows = new ArrayList<>();
+                for (CSVRecord record : parser) {
+                    if (rows.size() >= MAX_ROWS) throw new OrderImportValidationException("한 번에 최대 5,000행까지 검증할 수 있습니다.");
+                    Map<String, String> values = new LinkedHashMap<>();
+                    HEADERS.forEach(header -> values.put(header, record.get(header)));
+                    rows.add(new ParsedRow(Math.toIntExact(record.getRecordNumber() + 1), values));
+                }
+                return rows;
             }
-            List<ParsedRow> rows = new ArrayList<>();
-            for (CSVRecord record : parser) {
-                if (rows.size() >= MAX_ROWS) throw new OrderImportValidationException("한 번에 최대 5,000행까지 검증할 수 있습니다.");
-                Map<String, String> values = new LinkedHashMap<>();
-                HEADERS.forEach(header -> values.put(header, record.get(header)));
-                rows.add(new ParsedRow(Math.toIntExact(record.getRecordNumber() + 1), values));
-            }
-            return rows;
         } catch (OrderImportValidationException exception) {
             throw exception;
         } catch (IOException | IllegalArgumentException exception) {
