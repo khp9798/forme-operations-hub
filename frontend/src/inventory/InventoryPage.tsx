@@ -49,18 +49,17 @@ export function InventoryPage() {
     if (!selected) return
     const data = new FormData(event.currentTarget)
     try {
-      const result = await apiRequest<{ idempotent: boolean }>('/api/v1/inventory/movements', {
+      await apiRequest('/api/v1/inventory/adjustment-requests', {
         method: 'POST', body: JSON.stringify({
           warehouseCode: selected.warehouseCode, skuCode: selected.skuCode,
           movementType: data.get('movementType'), quantity: Number(data.get('quantity')),
-          reason: data.get('reason'), idempotencyKey: crypto.randomUUID(),
+          reason: data.get('reason'),
         }),
       })
-      setNotice(result.idempotent ? '이미 처리된 요청입니다.' : '재고 변경을 반영했습니다.')
+      setNotice('재고 조정 요청을 등록했습니다. 승인 후 실제 재고에 반영됩니다.')
       setSelected(null)
-      await load()
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '재고를 변경하지 못했습니다.')
+      setError(reason instanceof Error ? reason.message : '재고 조정을 요청하지 못했습니다.')
     }
   }
 
@@ -102,13 +101,14 @@ export function InventoryPage() {
     {selected && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelected(null) }}>
       <section className="movement-modal" role="dialog" aria-modal="true" aria-labelledby="movement-title">
         <button className="modal-close" onClick={() => setSelected(null)} aria-label="닫기">×</button>
-        <p className="eyebrow">INVENTORY MOVEMENT</p><h2 id="movement-title">재고 조정</h2>
+        <p className="eyebrow">INVENTORY APPROVAL</p><h2 id="movement-title">재고 조정 요청</h2>
         <div className="selected-sku"><b>{selected.productName}</b><span>{selected.warehouseCode} · {selected.skuCode}</span><small>실재고 {selected.onHandQuantity} / 예약 {selected.reservedQuantity} / 판매 가능 {selected.availableQuantity}</small></div>
         <form onSubmit={submitMovement}>
           <label>처리 유형<select name="movementType" defaultValue="RECEIPT">{Object.entries(movementLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
           <label>수량<input name="quantity" type="number" min="1" defaultValue="1" required /></label>
           <label>처리 사유<textarea name="reason" maxLength={500} placeholder="예: 8월 정기 입고 검수 완료" required /></label>
-          <button className="primary modal-submit">변경 반영</button>
+          <p className="approval-hint">승인 담당자가 검토한 뒤 실제 재고에 반영됩니다.</p>
+          <button className="primary modal-submit">승인 요청</button>
         </form>
       </section>
     </div>}

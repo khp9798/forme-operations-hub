@@ -3,6 +3,8 @@ import './App.css'
 import { LoginScreen, useAuth } from './auth/AuthContext'
 import { InventoryPage } from './inventory/InventoryPage'
 import { OrderImportPage } from './order-import/OrderImportPage'
+import { ApprovalPage } from './approval/ApprovalPage'
+import { AuditLogPage } from './audit/AuditLogPage'
 
 const metrics = [
   { label: '오늘 통합 주문', value: '18,420', delta: '+12.4%', tone: 'blue' },
@@ -26,7 +28,7 @@ const exceptions = [
 
 function App() {
   const { operator, restoring, logout } = useAuth()
-  const [page, setPage] = useState<'overview' | 'orders' | 'inventory'>('overview')
+  const [page, setPage] = useState<'overview' | 'orders' | 'inventory' | 'approvals' | 'audit'>('overview')
 
   if (restoring) return <div className="session-loading">운영 세션을 확인하는 중입니다.</div>
   if (!operator) return <LoginScreen />
@@ -37,26 +39,27 @@ function App() {
         <div className="brand"><span>FORME</span><small>OPS</small></div>
         <nav aria-label="주요 메뉴">
           <button className={page === 'overview' ? 'active' : ''} onClick={() => setPage('overview')}>운영 현황</button>
-          <button className={page === 'orders' ? 'active' : ''} onClick={() => setPage('orders')}>주문 통합</button>
-          <button className={page === 'inventory' ? 'active' : ''} onClick={() => setPage('inventory')}>재고 관리</button>
+          {(operator.roles.includes('ROLE_OPERATOR') || operator.roles.includes('ROLE_ADMIN')) && <button className={page === 'orders' ? 'active' : ''} onClick={() => setPage('orders')}>주문 통합</button>}
+          {(operator.roles.includes('ROLE_OPERATOR') || operator.roles.includes('ROLE_ADMIN')) && <button className={page === 'inventory' ? 'active' : ''} onClick={() => setPage('inventory')}>재고 관리</button>}
           <button disabled>배치 작업 <small>준비 중</small></button>
-          <button disabled>승인 업무 <small>준비 중</small></button>
-          <button disabled>감사 로그 <small>준비 중</small></button>
+          {(operator.roles.includes('ROLE_APPROVER') || operator.roles.includes('ROLE_ADMIN')) && <button className={page === 'approvals' ? 'active' : ''} onClick={() => setPage('approvals')}>승인 업무</button>}
+          {(operator.roles.includes('ROLE_APPROVER') || operator.roles.includes('ROLE_ADMIN')) && <button className={page === 'audit' ? 'active' : ''} onClick={() => setPage('audit')}>감사 로그</button>}
           <button disabled>AI 어시스턴트 <small>준비 중</small></button>
         </nav>
         <div className="sidebar-foot">
+          <button className="sidebar-account" onClick={() => void logout()}><span>{operator.username}</span><small>로그아웃 →</small></button>
           <span className="health-dot" /> 모든 시스템 정상
           <small>production · ap-northeast</small>
         </div>
       </aside>
 
       <main>
-        {page === 'inventory' ? <InventoryPage /> : page === 'orders' ? <OrderImportPage /> : <>
+        {page === 'inventory' ? <InventoryPage /> : page === 'orders' ? <OrderImportPage /> : page === 'approvals' ? <ApprovalPage /> : page === 'audit' ? <AuditLogPage /> : <>
         <header className="topbar">
           <div><p className="eyebrow">GLOBAL OPERATIONS CONTROL</p><h1>운영 현황</h1></div>
           <div className="header-actions">
             <button className="search">⌕&nbsp; 주문·SKU·작업 검색</button>
-            <div className="operator"><span>{operator.username}</span><small>{operator.roles.includes('ROLE_OPERATOR') ? 'OPERATOR' : 'USER'}</small></div>
+            <div className="operator"><span>{operator.username}</span><small>{operator.roles.includes('ROLE_ADMIN') ? 'ADMIN' : operator.roles.includes('ROLE_APPROVER') ? 'APPROVER' : operator.roles.includes('ROLE_OPERATOR') ? 'OPERATOR' : 'USER'}</small></div>
             <button className="profile" aria-label="로그아웃" onClick={() => void logout()}>OUT</button>
           </div>
         </header>

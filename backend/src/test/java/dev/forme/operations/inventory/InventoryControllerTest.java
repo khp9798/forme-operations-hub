@@ -48,7 +48,7 @@ class InventoryControllerTest {
     }
 
     @Test
-    @WithMockUser(username = "ops-admin", roles = "OPERATOR")
+    @WithMockUser(username = "ops-admin", roles = "ADMIN")
     void searchesInventory() throws Exception {
         when(inventoryService.search("MLB", "ICN-01")).thenReturn(List.of(
                 new InventoryPositionResponse("ICN-01", "인천 통합 물류센터", "MLB", "3ACPB014N",
@@ -64,7 +64,7 @@ class InventoryControllerTest {
     }
 
     @Test
-    @WithMockUser(username = "ops-admin", roles = "OPERATOR")
+    @WithMockUser(username = "ops-admin", roles = "ADMIN")
     void createsMovementWithAuthenticatedActor() throws Exception {
         when(inventoryService.move(any(InventoryMovementRequest.class), eq("ops-admin")))
                 .thenReturn(new InventoryMovementResponse(UUID.fromString("11111111-1111-1111-1111-111111111111"),
@@ -90,7 +90,7 @@ class InventoryControllerTest {
     }
 
     @Test
-    @WithMockUser(username = "ops-admin", roles = "OPERATOR")
+    @WithMockUser(username = "ops-admin", roles = "ADMIN")
     void rejectsInvalidMovement() throws Exception {
         mockMvc.perform(post("/api/v1/inventory/movements")
                         .with(csrf())

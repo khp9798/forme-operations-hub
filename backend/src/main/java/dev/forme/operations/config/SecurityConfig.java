@@ -6,6 +6,7 @@ import java.io.IOException;
 
 import tools.jackson.databind.ObjectMapper;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -23,8 +24,11 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health", "/api/v1/system/info", "/api/v1/auth/csrf", "/api/v1/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/inventory/movements").hasRole("ADMIN")
                         .requestMatchers("/api/v1/inventory/**").hasAnyRole("OPERATOR", "ADMIN")
                         .requestMatchers("/api/v1/order-imports/**").hasAnyRole("OPERATOR", "ADMIN")
+                        .requestMatchers("/api/v1/approvals/**").hasAnyRole("APPROVER", "ADMIN")
+                        .requestMatchers("/api/v1/audit-logs/**").hasAnyRole("APPROVER", "ADMIN")
                         .anyRequest().authenticated())
                 .formLogin(form -> form
                         .loginProcessingUrl("/api/v1/auth/login")
