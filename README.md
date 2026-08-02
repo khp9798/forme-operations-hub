@@ -43,6 +43,7 @@ flowchart LR
 - CSRF 토큰으로 보호되는 로그인·재고 변경·로그아웃 요청
 - 로그인과 세션 복구를 중앙 관리하는 React 인증 컨텍스트
 - 실제 PostgreSQL API에 연결된 반응형 재고 조회·조정 화면
+- Testcontainers PostgreSQL에서 실행되는 동시 예약·중복 요청 통합 테스트
 
 ## 로컬 실행
 
@@ -69,31 +70,20 @@ npm run dev
 ## 재고 API
 
 ```bash
-# 재고 검색
-curl -u ops-admin:forme-local-admin \
-  'http://localhost:8080/api/v1/inventory?warehouseCode=ICN-01&query=MLB'
+# 세션·CSRF 흐름은 React 화면에서 자동 처리합니다.
+open http://localhost:5173
 
-# 재고 5개 예약
-curl -u ops-admin:forme-local-admin \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "warehouseCode":"ICN-01",
-    "skuCode":"MLB-CAP-0091-BK-F",
-    "movementType":"RESERVE",
-    "quantity":5,
-    "idempotencyKey":"order-1001-reserve",
-    "reason":"출고 예약"
-  }' \
-  http://localhost:8080/api/v1/inventory/movements
+# 백엔드 전체 테스트 + 실제 PostgreSQL 동시성 통합 테스트
+cd backend
+JAVA_HOME="$(brew --prefix openjdk@21)" ./gradlew test
 ```
 
 `idempotencyKey`가 같은 요청을 다시 보내면 재고를 또 차감하지 않고 최초 처리 결과를 돌려줍니다. 재고 행은 변경하는 동안 잠가 동시에 여러 요청이 들어와도 수량 검증과 변경이 한 줄로 처리됩니다.
 
 ## 다음 구현 순서
 
-1. PostgreSQL 동시 재고 변경 통합 테스트
-2. 외부 주문 CSV 업로드 및 검증
-3. Spring Batch 청크 처리·실패 격리·재시작
-4. 역할 기반 승인·감사 로그
-5. 판매·재고 집계 및 SQL 튜닝
-6. RAG 기반 업무 매뉴얼과 AI 조회 도구
+1. 외부 주문 CSV 업로드 및 검증
+2. Spring Batch 청크 처리·실패 격리·재시작
+3. 역할 기반 승인·감사 로그
+4. 판매·재고 집계 및 SQL 튜닝
+5. RAG 기반 업무 매뉴얼과 AI 조회 도구
