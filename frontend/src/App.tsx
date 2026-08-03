@@ -6,6 +6,7 @@ import { OrderImportPage } from './order-import/OrderImportPage'
 import { ApprovalPage } from './approval/ApprovalPage'
 import { AuditLogPage } from './audit/AuditLogPage'
 import { SalesAnalyticsPage } from './analytics/SalesAnalyticsPage'
+import { OperationalBatchPage } from './operations-batch/OperationalBatchPage'
 
 const metrics = [
   { label: '오늘 통합 주문', value: '18,420', delta: '+12.4%', tone: 'blue' },
@@ -29,7 +30,7 @@ const exceptions = [
 
 function App() {
   const { operator, restoring, logout } = useAuth()
-  const [page, setPage] = useState<'overview' | 'orders' | 'inventory' | 'analytics' | 'approvals' | 'audit'>('overview')
+  const [page, setPage] = useState<'overview' | 'orders' | 'inventory' | 'analytics' | 'batch' | 'approvals' | 'audit'>('overview')
 
   if (restoring) return <div className="session-loading">운영 세션을 확인하는 중입니다.</div>
   if (!operator) return <LoginScreen />
@@ -43,7 +44,7 @@ function App() {
           {(operator.roles.includes('ROLE_OPERATOR') || operator.roles.includes('ROLE_ADMIN')) && <button className={page === 'orders' ? 'active' : ''} onClick={() => setPage('orders')}>주문 통합</button>}
           {(operator.roles.includes('ROLE_OPERATOR') || operator.roles.includes('ROLE_ADMIN')) && <button className={page === 'inventory' ? 'active' : ''} onClick={() => setPage('inventory')}>재고 관리</button>}
           <button className={page === 'analytics' ? 'active' : ''} onClick={() => setPage('analytics')}>판매·재고 분석</button>
-          <button disabled>배치 작업 <small>준비 중</small></button>
+          <button className={page === 'batch' ? 'active' : ''} onClick={() => setPage('batch')}>배치 작업</button>
           {(operator.roles.includes('ROLE_APPROVER') || operator.roles.includes('ROLE_ADMIN')) && <button className={page === 'approvals' ? 'active' : ''} onClick={() => setPage('approvals')}>승인 업무</button>}
           {(operator.roles.includes('ROLE_APPROVER') || operator.roles.includes('ROLE_ADMIN')) && <button className={page === 'audit' ? 'active' : ''} onClick={() => setPage('audit')}>감사 로그</button>}
           <button disabled>AI 어시스턴트 <small>준비 중</small></button>
@@ -56,7 +57,7 @@ function App() {
       </aside>
 
       <main>
-        {page === 'inventory' ? <InventoryPage /> : page === 'orders' ? <OrderImportPage /> : page === 'analytics' ? <SalesAnalyticsPage /> : page === 'approvals' ? <ApprovalPage /> : page === 'audit' ? <AuditLogPage /> : <>
+        {page === 'inventory' ? <InventoryPage /> : page === 'orders' ? <OrderImportPage /> : page === 'analytics' ? <SalesAnalyticsPage /> : page === 'batch' ? <OperationalBatchPage /> : page === 'approvals' ? <ApprovalPage /> : page === 'audit' ? <AuditLogPage /> : <>
         <header className="topbar">
           <div><p className="eyebrow">GLOBAL OPERATIONS CONTROL</p><h1>운영 현황</h1></div>
           <div className="header-actions">
