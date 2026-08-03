@@ -136,6 +136,53 @@ public class SalesAnalyticsService {
         return new QueryPlanResponse(days, metric("원본 주문 실시간 집계", raw), metric("일별 집계 테이블 조회", aggregate));
     }
 
+    @Transactional
+    public BenchmarkSeedResponse generateBenchmarkData(int rows, String actor) {
+        if (rows < 10_000 || rows > 500_000) {
+            throw new IllegalArgumentException("샘플 데이터는 10,000행에서 500,000행 사이여야 합니다.");
+        }
+        jdbcTemplate.query("SELECT pg_advisory_xact_lock(hashtext('sales-query-benchmark-seed'))", resultSet -> null);
+        jdbcTemplate.execute("TRUNCATE sales_query_benchmark_heap, sales_query_benchmark_indexed");
+        jdbcTemplate.update("""
+                INSERT INTO sales_query_benchmark_heap (id, ordered_at, sku_code, quantity, gross_amount)
+                SELECT sequence,
+                       CURRENT_TIMESTAMP - ((sequence % 365) * INTERVAL '1 day') - ((sequence % 86400) * INTERVAL '1 second'),
+                       'BENCH-SKU-' || LPAD((sequence % 1000)::text, 4, '0'),
+                       ((sequence % 3) + 1)::integer,
+                       (((sequence % 3) + 1) * (10000 + (sequence % 90000)))::numeric(18, 2)
+                  FROM generate_series(1, ?) AS sequence
+                """, rows);
+        jdbcTemplate.execute("INSERT INTO sales_query_benchmark_indexed SELECT * FROM sales_query_benchmark_heap");
+        jdbcTemplate.execute("ANALYZE sales_query_benchmark_heap");
+        jdbcTemplate.execute("ANALYZE sales_query_benchmark_indexed");
+        jdbcTemplate.update("""
+                INSERT INTO audit_logs (id, actor, action, entity_type, entity_id, summary)
+                VALUES (gen_random_uuid(), ?, 'QUERY_BENCHMARK_DATA_GENERATED', 'QUERY_BENCHMARK', ?, ?)
+                """, actor, "sales-index-comparison", "SQL 성능 비교 샘플 %,d행 생성".formatted(rows));
+        return new BenchmarkSeedResponse(rows, Math.min(rows, 1000), Instant.now());
+    }
+
+    public IndexBenchmarkResponse compareIndexPlans(int days) {
+        validateDays(days);
+        int rows = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM sales_query_benchmark_heap", Integer.class);
+        if (rows == 0) {
+            throw new IllegalStateException("먼저 성능 비교용 샘플 데이터를 생성해 주세요.");
+        }
+        String query = """
+                SELECT sku_code, SUM(quantity), SUM(gross_amount)
+                  FROM %s
+                 WHERE ordered_at >= CURRENT_TIMESTAMP - (? * INTERVAL '1 day')
+                 GROUP BY sku_code
+                 ORDER BY SUM(gross_amount) DESC
+                 LIMIT 50
+                """;
+        List<String> withoutIndex = explain(query.formatted("sales_query_benchmark_heap"), days);
+        List<String> withIndex = explain(query.formatted("sales_query_benchmark_indexed"), days);
+        return new IndexBenchmarkResponse(days, rows,
+                metric("인덱스 없는 원본 테이블", withoutIndex),
+                metric("복합 커버링 인덱스 적용", withIndex));
+    }
+
     private List<String> explain(String sql, int days) {
         return jdbcTemplate.query("EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) " + sql,
                 (rs, rowNum) -> rs.getString(1), days);

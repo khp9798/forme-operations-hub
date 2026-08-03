@@ -95,6 +95,20 @@ class SalesAnalyticsIntegrationTest {
         assertTrue(plans.aggregateQuery().executionTimeMs() >= 0);
     }
 
+    @Test
+    void generatesIsolatedSamplesAndComparesIndexPlans() {
+        BenchmarkSeedResponse generated = service.generateBenchmarkData(10_000, "analytics-admin");
+        assertEquals(10_000, generated.sampleRows());
+        assertEquals(1000, generated.distinctSkus());
+
+        IndexBenchmarkResponse benchmark = service.compareIndexPlans(30);
+        assertEquals(10_000, benchmark.sampleRows());
+        assertFalse(benchmark.withoutIndex().planLines().isEmpty());
+        assertFalse(benchmark.withIndex().planLines().isEmpty());
+        assertTrue(benchmark.withoutIndex().executionTimeMs() >= 0);
+        assertTrue(benchmark.withIndex().executionTimeMs() >= 0);
+    }
+
     private UUID insertOrder(UUID jobId, String sourceOrderId) {
         UUID id = UUID.randomUUID();
         jdbcTemplate.update("""

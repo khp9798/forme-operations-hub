@@ -46,6 +46,29 @@ class SalesAnalyticsControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "operator", roles = "OPERATOR")
+    void operatorCanCompareIndexesButCannotGenerateSamples() throws Exception {
+        when(service.compareIndexPlans(30)).thenReturn(new IndexBenchmarkResponse(
+                30, 10_000,
+                new QueryPlanResponse.PlanMetric("without", 0.1, 2.0, List.of("Seq Scan")),
+                new QueryPlanResponse.PlanMetric("with", 0.1, 1.0, List.of("Index Scan"))));
+        mockMvc.perform(get("/api/v1/analytics/sales-inventory/index-benchmark"))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/analytics/sales-inventory/index-benchmark/data").with(csrf()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = "ADMIN")
+    void adminCanGenerateBenchmarkSamples() throws Exception {
+        when(service.generateBenchmarkData(10_000, "admin"))
+                .thenReturn(new BenchmarkSeedResponse(10_000, 1000, Instant.now()));
+        mockMvc.perform(post("/api/v1/analytics/sales-inventory/index-benchmark/data")
+                        .param("rows", "10000").with(csrf()))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void anonymousUserCannotReadAnalytics() throws Exception {
         mockMvc.perform(get("/api/v1/analytics/sales-inventory"))
                 .andExpect(status().isUnauthorized());
