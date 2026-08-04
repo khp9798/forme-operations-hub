@@ -18,7 +18,6 @@ import java.util.UUID;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -34,11 +33,11 @@ public class OrderImportService {
             "source_order_id", "ordered_at", "sku_code", "quantity", "unit_price", "currency",
             "recipient_name", "postal_code", "address_line1", "address_line2");
 
-    private final JdbcTemplate jdbcTemplate;
+    private final OrderImportRepository repository;
     private final ObjectMapper objectMapper;
 
-    public OrderImportService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
-        this.jdbcTemplate = jdbcTemplate;
+    public OrderImportService(OrderImportRepository repository, ObjectMapper objectMapper) {
+        this.repository = repository;
         this.objectMapper = objectMapper;
     }
 
@@ -48,8 +47,7 @@ public class OrderImportService {
         List<ParsedRow> parsedRows = parse(file);
         if (parsedRows.isEmpty()) throw new OrderImportValidationException("주문 데이터가 한 행 이상 필요합니다.");
 
-        Set<String> knownSkus = new HashSet<>(jdbcTemplate.queryForList(
-                "SELECT sku_code FROM skus WHERE active = TRUE", String.class));
+        Set<String> knownSkus = new HashSet<>(repository.findActiveSkuCodes());
         Set<String> orderSkuPairs = new HashSet<>();
         List<ValidatedRow> rows = parsedRows.stream()
                 .map(row -> validateRow(row, knownSkus, orderSkuPairs))
@@ -59,12 +57,8 @@ public class OrderImportService {
         int invalidCount = rows.size() - validCount;
         String status = invalidCount == 0 ? "COMPLETED" : "PARTIAL_FAILED";
         UUID jobId = UUID.randomUUID();
-        jdbcTemplate.update("""
-                INSERT INTO integration_jobs
-                    (id, source_system, job_type, source_file_name, status, total_count,
-                     success_count, failure_count, requested_by, started_at, completed_at)
-                VALUES (?, 'CSV_UPLOAD', 'ORDER_VALIDATION', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                """, jobId, safeFileName(file.getOriginalFilename()), status, rows.size(), validCount, invalidCount, actor);
+        repository.createValidationJob(jobId, safeFileName(file.getOriginalFilename()), status,
+                rows.size(), validCount, invalidCount, actor);
 
         for (ValidatedRow row : rows) insertRow(jobId, row);
         return new OrderImportResponse(jobId, safeFileName(file.getOriginalFilename()), status,
@@ -165,13 +159,7 @@ public class OrderImportService {
     private void insertRow(UUID jobId, ValidatedRow row) {
         Map<String, String> value = row.row().values();
         try {
-            jdbcTemplate.update("""
-                    INSERT INTO order_import_rows
-                        (id, integration_job_id, line_number, source_order_id, ordered_at, sku_code,
-                         quantity, unit_price, currency, recipient_name, postal_code, address_line1,
-                         address_line2, validation_status, error_codes, raw_data)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb)
-                    """, UUID.randomUUID(), jobId, row.row().lineNumber(), emptyToNull(value.get("source_order_id")),
+            repository.insertRow(jobId, row.row().lineNumber(), emptyToNull(value.get("source_order_id")),
                     row.orderedAt(), emptyToNull(value.get("sku_code")), row.quantity(), row.unitPrice(),
                     emptyToNull(row.currency()), emptyToNull(value.get("recipient_name")),
                     emptyToNull(value.get("postal_code")), emptyToNull(value.get("address_line1")),

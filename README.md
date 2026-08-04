@@ -87,6 +87,12 @@ npm run dev
 
 인증 후 브라우저에는 비밀번호 대신 HttpOnly `JSESSIONID` 쿠키가 저장됩니다. 세션은 기본 30분이며 상태 변경 요청은 CSRF 토큰이 필요합니다. 재고 API는 `OPERATOR` 또는 `ADMIN` 역할만 접근할 수 있습니다.
 
+## 백엔드 패키지와 데이터 접근 원칙
+
+최상위는 `orderimport`, `inventory`, `approval`, `operationsbatch`, `analytics`, `audit`, `auth`처럼 업무 기능별로 나눕니다. 각 기능 안에서 Controller는 HTTP, Service는 업무 흐름과 트랜잭션, Repository는 `JdbcTemplate` SQL과 결과 매핑을 담당합니다. 일반 Service에는 SQL 문자열을 두지 않아 업무 순서가 데이터 접근 구현에 가려지지 않게 했습니다.
+
+Spring Batch의 `OrderImportBatchConfiguration` Reader와 `OrderImportItemWriter`는 청크 읽기·쓰기 자체가 책임인 배치 인프라 구성 요소라 `JdbcTemplate` 사용을 유지합니다. 모든 클래스를 형식적으로 Repository로 감싸기보다 변경 책임이 실제로 분리되는 곳에만 계층을 적용합니다.
+
 ## 재고 API
 
 ```bash
