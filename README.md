@@ -130,6 +130,8 @@ Spring Batch 실행·Step·읽기·쓰기·커밋 정보는 Flyway가 만든 배
 
 대시보드 요청마다 `external_orders`와 `external_order_items` 전체를 조인·합산하지 않습니다. `daily_sku_sales`는 날짜·SKU·유입 시스템별 주문상품 수, 판매 수량, 매출을 미리 계산하고, `daily_channel_sales`는 여러 SKU가 들어간 주문도 전체 주문 수가 중복되지 않도록 날짜·채널별 합계를 별도로 보관합니다.
 
+분석 모듈은 `SalesAnalyticsService`와 `SalesAnalyticsRepository`로 책임을 나눕니다. Service는 기간 검증, 트랜잭션과 처리 순서, 응답 조립을 담당하고 Repository는 PostgreSQL SQL, 잠금, 감사 로그 저장과 조회 결과 변환을 담당합니다. 따라서 업무 흐름을 읽을 때 긴 SQL에 가리지 않고, 데이터 접근 방식이 바뀌어도 Service의 변경 범위를 줄일 수 있습니다.
+
 관리자가 집계를 갱신할 때 같은 날짜 범위를 지우고 원본 주문에서 다시 계산하므로 재실행해도 중복되지 않습니다. PostgreSQL advisory lock으로 동시에 두 번 갱신되는 것도 막고, 갱신 담당자와 범위·결과 행 수는 감사 로그에 남깁니다. 일반 운영자는 결과를 조회할 수 있지만 집계 갱신은 `ADMIN`만 실행할 수 있습니다.
 
 `SQL 실행계획 비교`는 사용자가 SQL을 직접 입력하는 기능이 아닙니다. 서버에 고정한 원본 조인 쿼리와 일별 집계 쿼리에만 `EXPLAIN (ANALYZE, BUFFERS)`를 실행해 계획 시간, 실행 시간과 실행계획 원문을 보여줍니다. 현재 로컬 3개 주문에서는 원본 0.228ms, 집계 0.053ms였지만 데이터와 캐시 상태에 따라 달라지므로 절대 성능 수치가 아니라 구조 비교 자료로 사용합니다.
