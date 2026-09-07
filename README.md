@@ -64,6 +64,8 @@ flowchart LR
 - 관리자 실패 재시도·상태 필터와 모바일 대응 배치 운영 화면
 - 실제 주문과 분리된 1만~50만 행 SQL 성능 비교 샘플 생성
 - 동일 데이터의 인덱스 미적용·복합 커버링 인덱스 적용 `EXPLAIN ANALYZE` 비교
+- Airflow ETL을 위한 `analytics` 스키마와 staging·dimension·fact·mart 계층
+- 파이프라인 실행 이력·오류 격리와 업무 키 UNIQUE 제약
 
 ## 로컬 실행
 
@@ -160,6 +162,23 @@ Spring Batch 실행·Step·읽기·쓰기·커밋 정보는 Flyway가 만든 배
 
 ## 다음 구현 순서
 
-1. RAG 기반 업무 매뉴얼과 AI 조회 도구
-2. Docker 배포와 장애 알림 자동화
-3. 대량 배치 처리량·실패 알림 관측성 강화
+1. Airflow 주문 ETL DAG와 멱등 적재
+2. FastAPI 분석 API와 React 대시보드 연결
+3. RAG 기반 업무 매뉴얼과 안전한 AI 조회 도구
+4. Docker·AWS 배포와 장애 알림 자동화
+5. 대량 파이프라인 처리량·실패 알림 관측성 강화
+
+## Airflow 분석 파이프라인 데이터 계층
+
+기존 Spring Scheduler 판매 집계는 애플리케이션 내부의 단일 주기 작업으로 유지합니다. Airflow는 외부 데이터 수집, 품질 검증, 분석 모델 적재, 결과 검증처럼 여러 단계와 과거 날짜 재처리가 필요한 분석 파이프라인을 관리합니다. 조회 속도는 Airflow 자체가 아니라 미리 계산한 mart와 인덱스에서 얻으며, Airflow는 실행 순서·스케줄·재시도·실행 이력을 책임집니다.
+
+`analytics` 스키마는 다음 책임으로 나눴습니다.
+
+- `pipeline_runs`: DAG 실행 ID, 데이터 기준 구간, 상태와 처리 건수
+- `stg_order_items`: 운영 원본에서 추출한 주문상품과 검증 상태
+- `rejected_order_items`: 분석 적재에서 제외된 행과 오류 코드
+- `dim_products`: 상품의 분석용 기준정보
+- `fact_order_items`: 주문상품 단위 판매 사실과 금액
+- `mart_daily_product_sales`: 화면과 AI가 빠르게 조회할 일별 상품 매출
+
+같은 DAG 실행 ID와 원본 주문상품 ID는 UNIQUE 제약으로 중복 저장을 막습니다. 이후 Airflow DAG도 UPSERT와 기간 재집계를 사용하고, 같은 기간을 두 번 실행해 행 수와 매출 합계가 변하지 않는 통합 테스트를 추가합니다.
