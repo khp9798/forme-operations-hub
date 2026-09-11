@@ -35,3 +35,7 @@ server:
       cookie:
         http-only: true
         same-site: lax
+
+forme:
+  analytics:
+    base-url: ${ANALYTICS_API_BASE_URL:http://localhost:8001}

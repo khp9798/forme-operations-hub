@@ -10,16 +10,26 @@ type Dashboard = { days: number; orderCount: number; unitsSold: number; grossSal
 type PlanMetric = { label: string; planningTimeMs: number; executionTimeMs: number; planLines: string[] }
 type Plans = { days: number; rawQuery: PlanMetric; aggregateQuery: PlanMetric }
 type IndexBenchmark = { days: number; sampleRows: number; withoutIndex: PlanMetric; withIndex: PlanMetric }
+type WarehouseAnalytics = {
+  days: number
+  summary: { orderCount: number; unitsSold: number; grossSales: number }
+  dailySales: { salesDate: string; orderCount: number; unitsSold: number; grossSales: number }[]
+  topProducts: { productKey: number; brandCode: string; productName: string; orderCount: number; unitsSold: number; grossSales: number }[]
+  channels: { sourceSystem: string; orderCount: number; unitsSold: number; grossSales: number }[]
+  pipeline: { status: string; extractedCount: number; rejectedCount: number; loadedCount: number; completedAt: string | null } | null
+  refreshedAt: string | null
+}
 
 const won = new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW', maximumFractionDigits: 0 })
 
 export function SalesAnalyticsPage() {
   const { operator } = useAuth()
-  const [days, setDays] = useState(30)
+  const [days, setDays] = useState(90)
   const [dashboard, setDashboard] = useState<Dashboard | null>(null)
   const [plans, setPlans] = useState<Plans | null>(null)
   const [benchmarkRows, setBenchmarkRows] = useState(100000)
   const [benchmark, setBenchmark] = useState<IndexBenchmark | null>(null)
+  const [warehouse, setWarehouse] = useState<WarehouseAnalytics | null>(null)
   const [loading, setLoading] = useState(true)
   const [working, setWorking] = useState(false)
   const [error, setError] = useState('')
@@ -27,15 +37,24 @@ export function SalesAnalyticsPage() {
 
   const load = useCallback(async (range = days) => {
     setLoading(true); setError('')
-    try { setDashboard(await apiRequest<Dashboard>(`/api/v1/analytics/sales-inventory?days=${range}`)) }
+    try {
+      const [dashboardResult, warehouseResult] = await Promise.all([
+        apiRequest<Dashboard>(`/api/v1/analytics/sales-inventory?days=${range}`),
+        apiRequest<WarehouseAnalytics>(`/api/v1/analytics/warehouse?days=${range}`),
+      ])
+      setDashboard(dashboardResult); setWarehouse(warehouseResult)
+    }
     catch (reason) { setError(reason instanceof Error ? reason.message : '판매·재고 지표를 불러오지 못했습니다.') }
     finally { setLoading(false) }
   }, [days])
 
   useEffect(() => {
     let active = true
-    apiRequest<Dashboard>('/api/v1/analytics/sales-inventory?days=30')
-      .then((result) => { if (active) setDashboard(result) })
+    Promise.all([
+      apiRequest<Dashboard>('/api/v1/analytics/sales-inventory?days=90'),
+      apiRequest<WarehouseAnalytics>('/api/v1/analytics/warehouse?days=90'),
+    ])
+      .then(([dashboardResult, warehouseResult]) => { if (active) { setDashboard(dashboardResult); setWarehouse(warehouseResult) } })
       .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : '판매·재고 지표를 불러오지 못했습니다.') })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
@@ -79,6 +98,7 @@ export function SalesAnalyticsPage() {
     ? Math.max(0, (1 - plans.aggregateQuery.executionTimeMs / plans.rawQuery.executionTimeMs) * 100) : 0
   const indexImprovement = benchmark && benchmark.withoutIndex.executionTimeMs > 0
     ? (1 - benchmark.withIndex.executionTimeMs / benchmark.withoutIndex.executionTimeMs) * 100 : 0
+  const maxDailySales = Math.max(...(warehouse?.dailySales.map((item) => item.grossSales) ?? [0]), 1)
 
   return <>
     <header className="topbar inventory-title">
@@ -95,6 +115,21 @@ export function SalesAnalyticsPage() {
       <article><span>판매 수량</span><strong>{dashboard?.unitsSold.toLocaleString() ?? '—'}</strong><small>상품 합계</small></article>
       <article className="revenue"><span>매출</span><strong>{dashboard ? won.format(dashboard.grossSales) : '—'}</strong><small>할인 전 총액</small></article>
       <article><span>판매 가능 재고</span><strong>{dashboard?.availableQuantity.toLocaleString() ?? '—'}</strong><small>전체 창고 합계</small></article>
+    </section>
+    <section className="panel warehouse-panel">
+      <div className="panel-head"><div><p className="eyebrow">AIRFLOW → POSTGRESQL → FASTAPI</p><h2>분석 마트 리포트</h2></div><small>{warehouse?.pipeline ? `최근 파이프라인 ${warehouse.pipeline.status}` : '파이프라인 실행 정보 없음'}</small></div>
+      <div className="warehouse-summary">
+        <article><span>집계 주문</span><strong>{warehouse?.summary.orderCount.toLocaleString() ?? '—'}</strong></article>
+        <article><span>집계 판매량</span><strong>{warehouse?.summary.unitsSold.toLocaleString() ?? '—'}</strong></article>
+        <article><span>집계 매출</span><strong>{warehouse ? won.format(warehouse.summary.grossSales) : '—'}</strong></article>
+        <article><span>격리된 오류 행</span><strong>{warehouse?.pipeline?.rejectedCount.toLocaleString() ?? '—'}</strong></article>
+      </div>
+      <div className="warehouse-grid">
+        <article><h3>일별 매출</h3><div className="daily-bars">{warehouse?.dailySales.length ? warehouse.dailySales.map((item) => <div key={item.salesDate}><time>{item.salesDate.slice(5)}</time><i><em style={{ width: `${item.grossSales / maxDailySales * 100}%` }} /></i><b>{won.format(item.grossSales)}</b></div>) : <p>집계된 일별 매출이 없습니다.</p>}</div></article>
+        <article><h3>매출 상위 상품</h3><ol>{warehouse?.topProducts.length ? warehouse.topProducts.slice(0, 5).map((item) => <li key={item.productKey}><span><b>{item.brandCode}</b>{item.productName}</span><strong>{won.format(item.grossSales)}</strong></li>) : <li className="warehouse-empty">집계된 상품이 없습니다.</li>}</ol></article>
+        <article><h3>주문 채널</h3><ol>{warehouse?.channels.length ? warehouse.channels.map((item) => <li key={item.sourceSystem}><span><b>{item.sourceSystem}</b>{item.orderCount.toLocaleString()}건</span><strong>{won.format(item.grossSales)}</strong></li>) : <li className="warehouse-empty">집계된 채널이 없습니다.</li>}</ol></article>
+      </div>
+      <footer>FastAPI가 분석 전용 테이블을 조회한 결과입니다. 마지막 갱신 {warehouse?.refreshedAt ? new Date(warehouse.refreshedAt).toLocaleString('ko-KR') : '—'}</footer>
     </section>
     <section className="panel analytics-panel">
       <div className="panel-head"><div><p className="eyebrow">SKU PERFORMANCE</p><h2>상품별 판매와 재고</h2></div><small>{dashboard?.lastRefreshedAt ? `${new Date(dashboard.lastRefreshedAt).toLocaleString('ko-KR')} 집계` : '집계 전'}</small></div>

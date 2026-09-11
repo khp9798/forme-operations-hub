@@ -1,5 +1,26 @@
 # FORME Operations Hub
 
+## FastAPI 판매 분석 서비스
+
+Airflow가 적재한 PostgreSQL 분석 계층을 Python FastAPI가 읽고, 기존 Spring Boot가 인증된 운영자에게 결과를 전달합니다. 브라우저가 FastAPI를 직접 호출하지 않으므로 로그인·역할 검사는 Spring Security 한 곳에서 유지됩니다.
+
+```text
+Airflow ETL → PostgreSQL analytics schema → FastAPI → Spring Boot → React
+```
+
+분석 환경을 실행합니다.
+
+```bash
+docker compose --profile analytics up -d --build
+```
+
+- FastAPI Swagger: `http://localhost:8001/docs`
+- FastAPI 상태 확인: `http://localhost:8001/health`
+- Airflow: `http://localhost:8081`
+- 인증된 Spring API: `GET /api/v1/analytics/warehouse?days=90`
+
+FastAPI 코드는 `router(main) → service → repository`로 분리했습니다. Repository는 매출 요약, 일별 매출, 상위 상품, 주문 채널, 최근 파이프라인 상태를 분석 전용 테이블에서 조회하며 연결 풀을 사용합니다.
+
 F&F 디지털본부 Java/Spring ERP·AI 시스템 직무를 목표로 설계한 글로벌 패션 주문·재고 통합 운영 플랫폼입니다. 고객용 이커머스인 [FORME](https://github.com/khp9798/forme-fashion-commerce)는 그대로 유지하고, 이 프로젝트는 사내 직원이 여러 브랜드·채널·창고의 업무를 처리하는 독립 시스템으로 개발합니다.
 
 ## 목표

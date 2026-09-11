@@ -15,6 +15,23 @@ services:
       timeout: 3s
       retries: 10
 
+  analytics-api:
+    build:
+      context: ./analytics-api
+    profiles: ["analytics"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ANALYTICS_DATABASE_URL: postgresql://${FORME_OPS_POSTGRES_USER:-forme}:${FORME_OPS_POSTGRES_PASSWORD:-forme_local_password}@postgres:5432/${FORME_OPS_POSTGRES_DB:-forme_ops}
+    ports:
+      - "${ANALYTICS_API_PORT:-8001}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   airflow-postgres:
     image: postgres:17-alpine
     profiles: ["analytics"]
