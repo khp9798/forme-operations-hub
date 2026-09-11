@@ -26,13 +26,18 @@ def pipeline_run_id(dag_run_id: str) -> uuid.UUID:
     return uuid.uuid5(uuid.NAMESPACE_URL, f"{DAG_ID}:{dag_run_id}")
 
 
-def hourly_data_interval(context) -> tuple[datetime, datetime]:
+def requested_data_interval(context) -> tuple[datetime, datetime]:
     interval_start = context["data_interval_start"]
     interval_end = context["data_interval_end"]
     if interval_end <= interval_start:
         interval_start = context["logical_date"]
         interval_end = interval_start + timedelta(hours=1)
     return interval_start, interval_end
+
+
+def should_reprocess_rejected(context) -> bool:
+    dag_run = context.get("dag_run")
+    return bool(dag_run and (dag_run.conf or {}).get("reprocess_rejected", False))
 
 
 def mark_pipeline_failed(context) -> None:
@@ -68,7 +73,7 @@ def daily_sales_pipeline():
         context = get_current_context()
         dag_run_id = context["run_id"]
         run_id = pipeline_run_id(dag_run_id)
-        interval_start, interval_end = hourly_data_interval(context)
+        interval_start, interval_end = requested_data_interval(context)
 
         with warehouse_connection() as connection, connection.cursor() as cursor:
             cursor.execute(
@@ -86,7 +91,8 @@ def daily_sales_pipeline():
     @task(retries=2)
     def extract_to_staging(pipeline_id: str) -> int:
         context = get_current_context()
-        interval_start, interval_end = hourly_data_interval(context)
+        interval_start, interval_end = requested_data_interval(context)
+        reprocess_rejected = should_reprocess_rejected(context)
 
         with warehouse_connection() as connection, connection.cursor() as cursor:
             cursor.execute(
@@ -106,10 +112,15 @@ def daily_sales_pipeline():
                 JOIN external_orders orders ON orders.id = item.order_id
                 JOIN skus sku ON sku.id = item.sku_id
                 JOIN products product ON product.id = sku.product_id
-                WHERE orders.ordered_at >= %s AND orders.ordered_at < %s
-                ON CONFLICT (source_order_item_id) DO NOTHING
+                WHERE (orders.ordered_at >= %s AND orders.ordered_at < %s)
+                   OR (%s AND EXISTS (
+                       SELECT 1 FROM analytics.rejected_order_items rejected
+                       WHERE rejected.source_order_item_id = item.id
+                         AND rejected.resolution_status = 'PENDING'
+                   ))
+                ON CONFLICT (pipeline_run_id, source_order_item_id) DO NOTHING
                 """,
-                (pipeline_id, interval_start, interval_end),
+                (pipeline_id, interval_start, interval_end, reprocess_rejected),
             )
             extracted_count = cursor.rowcount
             cursor.execute(
@@ -264,6 +275,31 @@ def daily_sales_pipeline():
             )
             return cursor.rowcount
 
+    @task(retries=1)
+    def resolve_reprocessed_rejections(pipeline_id: str) -> int:
+        context = get_current_context()
+        if not should_reprocess_rejected(context):
+            return 0
+
+        with warehouse_connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE analytics.rejected_order_items rejected
+                SET resolution_status = 'RESOLVED',
+                    resolved_at = CURRENT_TIMESTAMP,
+                    resolved_by_pipeline_run_id = %s
+                WHERE rejected.resolution_status = 'PENDING'
+                  AND EXISTS (
+                      SELECT 1 FROM analytics.stg_order_items staging
+                      WHERE staging.pipeline_run_id = %s
+                        AND staging.source_order_item_id = rejected.source_order_item_id
+                        AND staging.validation_status = 'VALID'
+                  )
+                """,
+                (pipeline_id, pipeline_id),
+            )
+            return cursor.rowcount
+
     @task
     def complete_pipeline(pipeline_id: str) -> None:
         with warehouse_connection() as connection, connection.cursor() as cursor:
@@ -281,11 +317,12 @@ def daily_sales_pipeline():
     validated = validate_and_quarantine(run_id)
     dimensions = load_dimensions(run_id)
     facts = load_facts(run_id)
+    resolved = resolve_reprocessed_rejections(run_id)
     mart = refresh_daily_mart(run_id)
     completed = complete_pipeline(run_id)
 
     extracted >> validated
-    validated >> dimensions >> facts >> mart >> completed
+    validated >> dimensions >> facts >> resolved >> mart >> completed
 
 
 daily_sales_pipeline()
