@@ -7,3 +7,6 @@ backend/build/
 frontend/node_modules/
 frontend/dist/
 .env
+airflow/logs/
+airflow/__pycache__/
+airflow/dags/__pycache__/

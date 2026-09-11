@@ -182,3 +182,22 @@ Spring Batch 실행·Step·읽기·쓰기·커밋 정보는 Flyway가 만든 배
 - `mart_daily_product_sales`: 화면과 AI가 빠르게 조회할 일별 상품 매출
 
 같은 DAG 실행 ID와 원본 주문상품 ID는 UNIQUE 제약으로 중복 저장을 막습니다. 이후 Airflow DAG도 UPSERT와 기간 재집계를 사용하고, 같은 기간을 두 번 실행해 행 수와 매출 합계가 변하지 않는 통합 테스트를 추가합니다.
+
+### Airflow 로컬 실행
+
+분석 파이프라인은 평소 개발 환경의 리소스를 차지하지 않도록 Compose의 `analytics` 프로필로 분리했습니다. 먼저 Spring Boot를 한 번 실행해 Flyway가 업무 DB에 `analytics` 스키마를 만든 다음 Airflow를 시작합니다.
+
+```bash
+docker compose up -d postgres
+cd backend && ./gradlew bootRun
+docker compose --profile analytics up --build -d
+```
+
+Airflow UI는 `http://localhost:8081`에서 확인하며 로컬 기본 계정은 `admin / admin`입니다. `forme_daily_sales_pipeline` DAG는 매시 정각에 다음 순서로 실행됩니다.
+
+```text
+실행 기록 시작 → staging 추출 → 검증·오류 격리 → 상품 차원 적재
+→ 주문 사실 적재 → 일별 상품 매출 mart 갱신 → 실행 완료 기록
+```
+
+업무 데이터와 Airflow 내부 실행 기록은 서로 다른 PostgreSQL 데이터베이스에 저장합니다. Airflow 메타데이터 장애나 초기화가 주문·재고 데이터에 영향을 주지 않게 하기 위한 분리입니다.
